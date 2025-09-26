@@ -606,7 +606,7 @@ async function startNewRound() {
         // Add this quote to used quotes
         const newUsedQuotes = [...usedQuotes, selectedQuote.id];
         
-        // Update game state in database
+        // Update game state in database (without timer - each player has their own)
         const { error: updateError } = await supabase
             .from('game_state')
             .upsert({
@@ -614,7 +614,6 @@ async function startNewRound() {
                 current_round: gameState.currentRound + 1,
                 game_status: 'playing',
                 current_quote_id: selectedQuote.id,
-                time_remaining: 10,
                 round_start_time: new Date().toISOString(),
                 used_quotes: JSON.stringify(newUsedQuotes)
             });
@@ -638,7 +637,7 @@ async function handleGameStateChange(newGameState) {
     
     gameState.gameStatus = newGameState.game_status;
     gameState.currentRound = newGameState.current_round;
-    gameState.timeRemaining = newGameState.time_remaining;
+    // Don't sync timer - each player has their own independent timer
     gameState.hasAnswered = false;
     
     if (newGameState.game_status === 'playing') {
@@ -688,7 +687,7 @@ async function startRoundForAllPlayers(quoteId) {
     }
 }
 
-// Start the game timer
+// Start the game timer (independent for each player)
 function startGameTimer() {
     if (gameTimer) {
         clearInterval(gameTimer);
@@ -703,8 +702,14 @@ function startGameTimer() {
         
         if (gameState.timeRemaining <= 0) {
             clearInterval(gameTimer);
+            console.log('Player timer reached 0, revealing answers...');
             revealAnswers();
-            endRound();
+            
+            // Only game masters can end the round for everyone
+            if (isAuthorizedPlayer(gameState.currentPlayer)) {
+                console.log('Game master timer reached 0, ending round for all players...');
+                endRound();
+            }
         }
     }, 1000);
 }
