@@ -203,11 +203,19 @@ let gameState = {
     correctAnswers: 0,
     totalAnswers: 0,
     gameStarted: false,
-    currentPlayer: null
+    currentPlayer: null,
+    gameStatus: 'waiting', // waiting, playing, showing_results
+    timeRemaining: 0,
+    roundStartTime: null,
+    playerScores: {},
+    hasAnswered: false
 };
 
-// Realtime subscription
+// Realtime subscriptions
 let participantsSubscription = null;
+let gameStateSubscription = null;
+let playerScoresSubscription = null;
+let gameTimer = null;
 
 // Debug system
 const debugMessages = [];
@@ -285,12 +293,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Set up realtime subscription for new participants
 function setupRealtimeSubscription() {
-    // Clean up existing subscription if any
+    // Clean up existing subscriptions if any
     if (participantsSubscription) {
         supabase.removeChannel(participantsSubscription);
     }
+    if (gameStateSubscription) {
+        supabase.removeChannel(gameStateSubscription);
+    }
+    if (playerScoresSubscription) {
+        supabase.removeChannel(playerScoresSubscription);
+    }
     
-    console.log('Setting up realtime subscription...');
+    console.log('Setting up realtime subscriptions...');
     
     // Subscribe to changes in user_submissions table
     participantsSubscription = supabase
@@ -302,20 +316,45 @@ function setupRealtimeSubscription() {
                 table: 'user_submissions' 
             }, 
             (payload) => {
-                console.log('Realtime event received:', payload);
+                console.log('New participant event:', payload);
                 handleNewParticipant(payload.new);
             }
         )
-        .subscribe((status) => {
-            console.log('Realtime subscription status:', status);
-            if (status === 'SUBSCRIBED') {
-                console.log('✅ Successfully subscribed to realtime updates');
-            } else if (status === 'CHANNEL_ERROR') {
-                console.log('❌ Realtime subscription failed - realtime might not be enabled');
-                // Fallback to polling if realtime fails
-                setupPollingFallback();
+        .subscribe();
+    
+    // Subscribe to game state changes
+    gameStateSubscription = supabase
+        .channel('game_state_changes')
+        .on('postgres_changes',
+            {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'game_state'
+            },
+            (payload) => {
+                console.log('Game state changed:', payload);
+                handleGameStateChange(payload.new);
             }
-        });
+        )
+        .subscribe();
+    
+    // Subscribe to player scores
+    playerScoresSubscription = supabase
+        .channel('player_scores_changes')
+        .on('postgres_changes',
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'player_scores'
+            },
+            (payload) => {
+                console.log('Player score added:', payload);
+                updatePlayerScores();
+            }
+        )
+        .subscribe();
+    
+    console.log('✅ All realtime subscriptions set up');
 }
 
 // Fallback polling method if realtime doesn't work
@@ -445,11 +484,33 @@ function displayParticipants(participants) {
     });
 }
 
-// Start a new game round
+// Start a new game round (only for authorized players)
 async function startNewRound() {
+    if (!isAuthorizedPlayer(gameState.currentPlayer)) {
+        console.log('Unauthorized player tried to start game');
+        return;
+    }
+    
     try {
-        // Get a random quote from the database
-        const { data, error } = await supabase
+        console.log('Starting new round...');
+        
+        // Get current game state to check used quotes
+        const { data: gameStateData, error: gameStateError } = await supabase
+            .from('game_state')
+            .select('used_quotes')
+            .eq('id', 1)
+            .single();
+        
+        if (gameStateError && gameStateError.code !== 'PGRST116') {
+            console.error('Error loading game state:', gameStateError);
+        }
+        
+        // Parse used quotes (default to empty array if none)
+        const usedQuotes = gameStateData ? JSON.parse(gameStateData.used_quotes || '[]') : [];
+        console.log('Used quotes:', usedQuotes);
+        
+        // Get all quotes from the database
+        const { data: allQuotes, error } = await supabase
             .from('user_submissions')
             .select('*')
             .order('created_at', { ascending: false });
@@ -460,33 +521,187 @@ async function startNewRound() {
             return;
         }
         
-        if (data.length === 0) {
+        if (allQuotes.length === 0) {
             showError('No quotes available yet. Submit some quotes first!');
             return;
         }
         
-        // Select a random quote
-        const randomIndex = Math.floor(Math.random() * data.length);
-        gameState.currentQuote = data[randomIndex];
+        // Filter out used quotes
+        const availableQuotes = allQuotes.filter(quote => !usedQuotes.includes(quote.id));
+        console.log('Available quotes:', availableQuotes.length);
         
-        // Update game state
-        gameState.currentRound++;
-        gameState.gameStarted = true;
+        // Check if we've used all quotes
+        if (availableQuotes.length === 0) {
+            showError('🎉 All quotes have been used! The game is complete!');
+            return;
+        }
         
-        // Display the quote and choices
-        displayQuoteAndChoices();
+        // Select a random quote from available quotes
+        const randomIndex = Math.floor(Math.random() * availableQuotes.length);
+        const selectedQuote = availableQuotes[randomIndex];
         
-        // Update stats
-        updateStats();
+        // Add this quote to used quotes
+        const newUsedQuotes = [...usedQuotes, selectedQuote.id];
         
-        // Hide start button and show game question
-        startGameBtn.style.display = 'none';
-        gameQuestion.classList.remove('hidden');
-        gameResult.classList.add('hidden');
+        // Update game state in database
+        const { error: updateError } = await supabase
+            .from('game_state')
+            .upsert({
+                id: 1,
+                current_round: gameState.currentRound + 1,
+                game_status: 'playing',
+                current_quote_id: selectedQuote.id,
+                time_remaining: 10,
+                round_start_time: new Date().toISOString(),
+                used_quotes: JSON.stringify(newUsedQuotes)
+            });
+        
+        if (updateError) {
+            console.error('Error updating game state:', updateError);
+            return;
+        }
+        
+        console.log('Game state updated in database with quote:', selectedQuote.id);
         
     } catch (error) {
         console.error('Error starting new round:', error);
         showError('Failed to start new round. Please try again.');
+    }
+}
+
+// Handle game state changes from database
+async function handleGameStateChange(newGameState) {
+    console.log('Handling game state change:', newGameState);
+    
+    gameState.gameStatus = newGameState.game_status;
+    gameState.currentRound = newGameState.current_round;
+    gameState.timeRemaining = newGameState.time_remaining;
+    gameState.hasAnswered = false;
+    
+    if (newGameState.game_status === 'playing') {
+        // Start the round for all players
+        await startRoundForAllPlayers(newGameState.current_quote_id);
+    } else if (newGameState.game_status === 'showing_results') {
+        // Show results for all players
+        showResultsForAllPlayers();
+    }
+}
+
+// Start round for all players
+async function startRoundForAllPlayers(quoteId) {
+    try {
+        // Get the quote data
+        const { data: quoteData, error } = await supabase
+            .from('user_submissions')
+            .select('*')
+            .eq('id', quoteId)
+            .single();
+        
+        if (error) {
+            console.error('Error loading quote:', error);
+            return;
+        }
+        
+        gameState.currentQuote = quoteData;
+        
+        // Show game question for all players
+        startGameBtn.style.display = 'none';
+        gameQuestion.classList.remove('hidden');
+        gameResult.classList.add('hidden');
+        
+        // Display the quote and choices
+        displayQuoteAndChoices();
+        
+        // Start the 10-second timer
+        startGameTimer();
+        
+        console.log('Round started for all players');
+        
+    } catch (error) {
+        console.error('Error starting round:', error);
+    }
+}
+
+// Start the game timer
+function startGameTimer() {
+    if (gameTimer) {
+        clearInterval(gameTimer);
+    }
+    
+    gameState.timeRemaining = 10;
+    updateTimerDisplay();
+    
+    gameTimer = setInterval(() => {
+        gameState.timeRemaining--;
+        updateTimerDisplay();
+        
+        if (gameState.timeRemaining <= 0) {
+            clearInterval(gameTimer);
+            endRound();
+        }
+    }, 1000);
+}
+
+// Update timer display
+function updateTimerDisplay() {
+    const timerElement = document.getElementById('gameTimer');
+    if (timerElement) {
+        timerElement.textContent = gameState.timeRemaining;
+        
+        // Change color as time runs out
+        if (gameState.timeRemaining <= 3) {
+            timerElement.style.color = '#ff6b6b';
+            timerElement.style.animation = 'pulse 0.5s infinite';
+        } else if (gameState.timeRemaining <= 5) {
+            timerElement.style.color = '#feca57';
+        } else {
+            timerElement.style.color = '#4ecdc4';
+            timerElement.style.animation = 'none';
+        }
+    }
+}
+
+// End the round (called when timer expires)
+async function endRound() {
+    console.log('Round ended');
+    
+    // Update game state to show results
+    const { error } = await supabase
+        .from('game_state')
+        .upsert({
+            id: 1,
+            game_status: 'showing_results'
+        });
+    
+    if (error) {
+        console.error('Error updating game state to results:', error);
+    }
+}
+
+// Show results for all players
+function showResultsForAllPlayers() {
+    console.log('Showing results for all players');
+    
+    // Disable all choices
+    const allChoices = document.querySelectorAll('.name-choice');
+    allChoices.forEach(choice => {
+        choice.style.pointerEvents = 'none';
+    });
+    
+    // Show result panel
+    gameResult.classList.remove('hidden');
+    
+    // Update next round button visibility (only for authorized players)
+    if (isAuthorizedPlayer(gameState.currentPlayer)) {
+        nextRoundBtn.style.display = 'block';
+    } else {
+        nextRoundBtn.style.display = 'none';
+    }
+    
+    // Clear timer
+    if (gameTimer) {
+        clearInterval(gameTimer);
+        gameTimer = null;
     }
 }
 
@@ -519,7 +734,13 @@ function displayQuoteAndChoices() {
 }
 
 // Handle choice selection
-function selectChoice(choiceElement, selectedName) {
+async function selectChoice(choiceElement, selectedName) {
+    if (gameState.hasAnswered) {
+        return; // Prevent multiple answers
+    }
+    
+    gameState.hasAnswered = true;
+    
     // Disable all choices
     const allChoices = document.querySelectorAll('.name-choice');
     allChoices.forEach(choice => {
@@ -532,20 +753,78 @@ function selectChoice(choiceElement, selectedName) {
     
     // Check if correct
     const isCorrect = selectedName === gameState.currentQuote.user_name;
+    const responseTime = 10 - gameState.timeRemaining; // Time taken to respond
     
-    // Update stats
+    // Save player score to database
+    try {
+        const { error } = await supabase
+            .from('player_scores')
+            .insert({
+                player_name: gameState.currentPlayer,
+                round_number: gameState.currentRound,
+                selected_answer: selectedName,
+                correct_answer: gameState.currentQuote.user_name,
+                is_correct: isCorrect,
+                response_time: responseTime
+            });
+        
+        if (error) {
+            console.error('Error saving player score:', error);
+        } else {
+            console.log('Player score saved:', {
+                player: gameState.currentPlayer,
+                correct: isCorrect,
+                responseTime: responseTime
+            });
+        }
+    } catch (error) {
+        console.error('Error saving score:', error);
+    }
+    
+    // Update local stats
     gameState.totalAnswers++;
     if (isCorrect) {
         gameState.correctAnswers++;
     }
     
-    // Show result
-    setTimeout(() => {
-        showGameResult(isCorrect, selectedName);
-    }, 500);
+    // Show immediate feedback
+    showImmediateFeedback(isCorrect, selectedName);
 }
 
-// Show game result
+// Show immediate feedback when player answers
+function showImmediateFeedback(isCorrect, selectedName) {
+    const allChoices = document.querySelectorAll('.name-choice');
+    
+    // Mark correct and incorrect choices
+    allChoices.forEach(choice => {
+        const name = choice.dataset.name;
+        if (name === gameState.currentQuote.user_name) {
+            choice.classList.add('correct');
+        } else if (name === selectedName && !isCorrect) {
+            choice.classList.add('incorrect');
+        }
+    });
+    
+    // Show immediate feedback message
+    if (isCorrect) {
+        resultTitle.textContent = '🎉 Correct!';
+        resultTitle.style.color = '#4ecdc4';
+        resultMessage.textContent = `Great job! You got it right!`;
+        createConfetti();
+    } else {
+        resultTitle.textContent = '😅 Not quite!';
+        resultTitle.style.color = '#ff6b6b';
+        resultMessage.textContent = `The correct answer was ${gameState.currentQuote.user_name}.`;
+    }
+    
+    // Show result panel
+    gameResult.classList.remove('hidden');
+    
+    // Update stats
+    updateStats();
+}
+
+// Show game result (called when round ends)
 function showGameResult(isCorrect, selectedName) {
     const allChoices = document.querySelectorAll('.name-choice');
     
@@ -589,6 +868,52 @@ function updateStats() {
     totalAnswersEl.textContent = gameState.totalAnswers;
 }
 
+// Update player scores from database
+async function updatePlayerScores() {
+    try {
+        const { data, error } = await supabase
+            .from('player_scores')
+            .select('*')
+            .eq('player_name', gameState.currentPlayer)
+            .order('round_number', { ascending: true });
+        
+        if (error) {
+            console.error('Error loading player scores:', error);
+            return;
+        }
+        
+        // Update local stats
+        gameState.correctAnswers = data.filter(score => score.is_correct).length;
+        gameState.totalAnswers = data.length;
+        
+        // Update display
+        updateStats();
+        
+    } catch (error) {
+        console.error('Error updating player scores:', error);
+    }
+}
+
+// Reset used quotes (for starting a fresh game)
+async function resetUsedQuotes() {
+    try {
+        const { error } = await supabase
+            .from('game_state')
+            .upsert({
+                id: 1,
+                used_quotes: '[]'
+            });
+        
+        if (error) {
+            console.error('Error resetting used quotes:', error);
+        } else {
+            console.log('Used quotes reset for new game');
+        }
+    } catch (error) {
+        console.error('Error resetting used quotes:', error);
+    }
+}
+
 // Go back to input screen
 function goBackToInput() {
     // Hide game area
@@ -610,16 +935,33 @@ function goBackToInput() {
     gameState.gameStarted = false;
     gameState.currentPlayer = null;
     
-    // Clean up realtime subscription
+    // Reset used quotes for a fresh game
+    resetUsedQuotes();
+    
+    // Clean up realtime subscriptions
     if (participantsSubscription) {
         supabase.removeChannel(participantsSubscription);
         participantsSubscription = null;
+    }
+    if (gameStateSubscription) {
+        supabase.removeChannel(gameStateSubscription);
+        gameStateSubscription = null;
+    }
+    if (playerScoresSubscription) {
+        supabase.removeChannel(playerScoresSubscription);
+        playerScoresSubscription = null;
     }
     
     // Clean up polling interval if it exists
     if (gameState.pollingInterval) {
         clearInterval(gameState.pollingInterval);
         gameState.pollingInterval = null;
+    }
+    
+    // Clean up game timer
+    if (gameTimer) {
+        clearInterval(gameTimer);
+        gameTimer = null;
     }
     
     // Reset UI

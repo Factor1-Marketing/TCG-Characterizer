@@ -695,11 +695,44 @@ body::after {
     text-align: center;
 }
 
+.timer-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
 .choices-title {
     font-family: 'Fredoka One', cursive;
     font-size: 1.6rem;
     color: #495057;
-    margin-bottom: 25px;
+    margin: 0;
+}
+
+.game-timer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.timer-label {
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.timer-value {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.8rem;
+    color: #4ecdc4;
+    min-width: 30px;
+    text-align: center;
 }
 
 .name-choices {
@@ -859,6 +892,15 @@ body::after {
     
     .name-choices {
         grid-template-columns: 1fr;
+    }
+    
+    .timer-container {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .game-timer {
+        margin-top: 10px;
     }
     
     .game-stats {
