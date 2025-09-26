@@ -283,8 +283,16 @@ document.addEventListener('DOMContentLoaded', () => {
     loadParticipants();
     
     // Game event listeners
-    startGameBtn.addEventListener('click', startNewRound);
-    nextRoundBtn.addEventListener('click', startNewRound);
+    startGameBtn.addEventListener('click', (e) => {
+        console.log('Start game button clicked!');
+        e.preventDefault();
+        startNewRound();
+    });
+    nextRoundBtn.addEventListener('click', (e) => {
+        console.log('Next round button clicked!');
+        e.preventDefault();
+        startNewRound();
+    });
     backToInputBtn.addEventListener('click', goBackToInput);
     
     // Debug system setup
@@ -530,8 +538,13 @@ function displayParticipants(participants) {
 
 // Start a new game round (only for authorized players)
 async function startNewRound() {
+    console.log('Start game button clicked!');
+    console.log('Current player:', gameState.currentPlayer);
+    console.log('Is authorized:', isAuthorizedPlayer(gameState.currentPlayer));
+    
     if (!isAuthorizedPlayer(gameState.currentPlayer)) {
         console.log('Unauthorized player tried to start game');
+        showError('Only authorized players can start the game!');
         return;
     }
     
@@ -539,6 +552,7 @@ async function startNewRound() {
         console.log('Starting new round...');
         
         // Get current game state to check used quotes
+        console.log('Loading current game state...');
         const { data: gameStateData, error: gameStateError } = await supabase
             .from('game_state')
             .select('used_quotes')
@@ -547,7 +561,11 @@ async function startNewRound() {
         
         if (gameStateError && gameStateError.code !== 'PGRST116') {
             console.error('Error loading game state:', gameStateError);
+            showError('Failed to load game state. Please try again.');
+            return;
         }
+        
+        console.log('Game state data:', gameStateData);
         
         // Parse used quotes (default to empty array if none)
         const usedQuotes = gameStateData ? JSON.parse(gameStateData.used_quotes || '[]') : [];
@@ -1157,6 +1175,9 @@ function setupDebugSystem() {
     
     // Add initial debug message
     addDebugMessage('success', 'Debug system initialized!');
+    
+    // Test database connection
+    testDatabaseConnection();
 }
 
 function addDebugMessage(type, message) {
@@ -1195,6 +1216,28 @@ function updateDebugDisplay() {
     
     // Auto-scroll to bottom
     debugMessagesEl.scrollTop = debugMessagesEl.scrollHeight;
+}
+
+// Test database connection
+async function testDatabaseConnection() {
+    try {
+        console.log('Testing database connection...');
+        const { data, error } = await supabase
+            .from('user_submissions')
+            .select('count')
+            .limit(1);
+        
+        if (error) {
+            console.error('Database connection test failed:', error);
+            addDebugMessage('error', `Database connection failed: ${error.message}`);
+        } else {
+            console.log('Database connection successful');
+            addDebugMessage('success', 'Database connection successful');
+        }
+    } catch (error) {
+        console.error('Database connection test error:', error);
+        addDebugMessage('error', `Database test error: ${error.message}`);
+    }
 }
 
 // Update start button visibility based on current player
