@@ -735,6 +735,44 @@ body::after {
     text-align: center;
 }
 
+/* Answer indicator */
+.answer-indicator {
+    background: linear-gradient(135deg, #d4edda, #c3e6cb);
+    border: 2px solid #c3e6cb;
+    border-radius: 15px;
+    padding: 15px 20px;
+    margin-top: 20px;
+    animation: slideInUp 0.3s ease-out;
+}
+
+.indicator-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: center;
+}
+
+.indicator-icon {
+    font-size: 1.2rem;
+}
+
+.indicator-text {
+    font-weight: 700;
+    color: #155724;
+    font-size: 1rem;
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .name-choices {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -872,6 +910,123 @@ body::after {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+}
+
+/* Leaderboard Styles */
+.leaderboard-panel {
+    margin-top: 30px;
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    border-radius: 20px;
+    padding: 25px;
+    border: 2px solid #dee2e6;
+}
+
+.leaderboard-title {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.8rem;
+    color: #495057;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.leaderboard-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.leaderboard-entry {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: white;
+    padding: 15px 20px;
+    border-radius: 15px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    border-left: 4px solid;
+}
+
+.leaderboard-entry:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+}
+
+.leaderboard-entry.rank-1 {
+    border-left-color: #ffd700;
+    background: linear-gradient(135deg, #fff9e6, #fff3cd);
+}
+
+.leaderboard-entry.rank-2 {
+    border-left-color: #c0c0c0;
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+}
+
+.leaderboard-entry.rank-3 {
+    border-left-color: #cd7f32;
+    background: linear-gradient(135deg, #fdf2e9, #fce4d6);
+}
+
+.leaderboard-rank {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.5rem;
+    font-weight: 700;
+    min-width: 40px;
+    text-align: center;
+}
+
+.leaderboard-rank.rank-1 {
+    color: #ffd700;
+}
+
+.leaderboard-rank.rank-2 {
+    color: #c0c0c0;
+}
+
+.leaderboard-rank.rank-3 {
+    color: #cd7f32;
+}
+
+.leaderboard-player {
+    flex: 1;
+    margin-left: 15px;
+}
+
+.leaderboard-name {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: #333;
+    margin-bottom: 2px;
+}
+
+.leaderboard-stats {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.leaderboard-score {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 80px;
+}
+
+.leaderboard-correct {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.3rem;
+    color: #4ecdc4;
+    font-weight: 700;
+}
+
+.leaderboard-total {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.leaderboard-percentage {
+    font-size: 0.8rem;
+    color: #999;
+    margin-top: 2px;
 }
 
 /* Responsive Design for Game Area */

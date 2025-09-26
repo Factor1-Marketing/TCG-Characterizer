@@ -239,6 +239,7 @@ const backToInputBtn = document.getElementById('backToInput');
 const currentPlayerName = document.getElementById('currentPlayerName');
 const gameControlStatus = document.getElementById('gameControlStatus');
 const gameControlMessage = document.getElementById('gameControlMessage');
+const leaderboardList = document.getElementById('leaderboardList');
 
 // Stats elements
 const currentRoundEl = document.getElementById('currentRound');
@@ -731,6 +732,12 @@ function updateTimerDisplay() {
 function revealAnswers() {
     console.log('Revealing answers...');
     
+    // Remove the answer indicator
+    const answerIndicator = document.getElementById('answerIndicator');
+    if (answerIndicator) {
+        answerIndicator.remove();
+    }
+    
     const allChoices = document.querySelectorAll('.name-choice');
     
     // Mark the correct answer
@@ -770,6 +777,9 @@ function revealAnswers() {
         resultTitle.style.color = '#ff6b6b';
         resultMessage.textContent = `The correct answer was ${gameState.currentQuote.user_name} (${gameState.currentQuote.position} at ${gameState.currentQuote.brand}).`;
     }
+    
+    // NOW show the result panel
+    gameResult.classList.remove('hidden');
 }
 
 // End the round (called when timer expires)
@@ -926,13 +936,23 @@ async function selectChoice(choiceElement, selectedName) {
 
 // Show that player has submitted their answer (but don't reveal the correct answer yet)
 function showAnswerSubmitted(selectedName) {
-    // Show a message that the player has answered
-    resultTitle.textContent = '✅ Answer Submitted!';
-    resultTitle.style.color = '#4ecdc4';
-    resultMessage.textContent = `You selected "${selectedName}". Waiting for other players...`;
+    // Don't show the result panel yet - just show a small indicator
+    // The result panel will only be shown when timer reaches 0
     
-    // Show result panel
-    gameResult.classList.remove('hidden');
+    // Create a small indicator that the player has answered
+    const answerIndicator = document.createElement('div');
+    answerIndicator.id = 'answerIndicator';
+    answerIndicator.className = 'answer-indicator';
+    answerIndicator.innerHTML = `
+        <div class="indicator-content">
+            <span class="indicator-icon">✅</span>
+            <span class="indicator-text">Answer submitted: "${selectedName}"</span>
+        </div>
+    `;
+    
+    // Add to the choices container
+    const choicesContainer = document.querySelector('.choices-container');
+    choicesContainer.appendChild(answerIndicator);
     
     // Update stats
     updateStats();
@@ -1036,9 +1056,98 @@ async function updatePlayerScores() {
         // Update display
         updateStats();
         
+        // Update leaderboard
+        loadLeaderboard();
+        
     } catch (error) {
         console.error('Error updating player scores:', error);
     }
+}
+
+// Load and display leaderboard
+async function loadLeaderboard() {
+    try {
+        console.log('Loading leaderboard...');
+        
+        // Get all player scores grouped by player
+        const { data, error } = await supabase
+            .from('player_scores')
+            .select('player_name, is_correct');
+        
+        if (error) {
+            console.error('Error loading leaderboard:', error);
+            return;
+        }
+        
+        // Calculate scores for each player
+        const playerScores = {};
+        data.forEach(score => {
+            if (!playerScores[score.player_name]) {
+                playerScores[score.player_name] = {
+                    name: score.player_name,
+                    correct: 0,
+                    total: 0
+                };
+            }
+            playerScores[score.player_name].total++;
+            if (score.is_correct) {
+                playerScores[score.player_name].correct++;
+            }
+        });
+        
+        // Convert to array and sort by correct answers (descending)
+        const leaderboardData = Object.values(playerScores)
+            .sort((a, b) => {
+                // Sort by correct answers first, then by total answers
+                if (b.correct !== a.correct) {
+                    return b.correct - a.correct;
+                }
+                return b.total - a.total;
+            });
+        
+        console.log('Leaderboard data:', leaderboardData);
+        
+        // Display leaderboard
+        displayLeaderboard(leaderboardData);
+        
+    } catch (error) {
+        console.error('Error loading leaderboard:', error);
+    }
+}
+
+// Display leaderboard
+function displayLeaderboard(leaderboardData) {
+    if (!leaderboardList) return;
+    
+    leaderboardList.innerHTML = '';
+    
+    if (leaderboardData.length === 0) {
+        leaderboardList.innerHTML = '<p style="text-align: center; color: #666; font-style: italic;">No scores yet. Play some rounds to see the leaderboard!</p>';
+        return;
+    }
+    
+    leaderboardData.forEach((player, index) => {
+        const rank = index + 1;
+        const percentage = player.total > 0 ? Math.round((player.correct / player.total) * 100) : 0;
+        
+        const entry = document.createElement('div');
+        entry.className = `leaderboard-entry rank-${rank <= 3 ? rank : 'other'}`;
+        
+        entry.innerHTML = `
+            <div class="leaderboard-rank rank-${rank <= 3 ? rank : 'other'}">${rank}</div>
+            <div class="leaderboard-player">
+                <div class="leaderboard-name">${player.name}</div>
+                <div class="leaderboard-stats">${player.total} questions answered</div>
+            </div>
+            <div class="leaderboard-score">
+                <div class="leaderboard-correct">${player.correct}</div>
+                <div class="leaderboard-total">/ ${player.total}</div>
+                <div class="leaderboard-percentage">${percentage}%</div>
+            </div>
+        `;
+        
+        leaderboardList.appendChild(entry);
+    });
 }
 
 // Reset used quotes (for starting a fresh game)
@@ -1357,6 +1466,9 @@ function showSuccess() {
         
         // Load current game state
         loadCurrentGameState();
+        
+        // Load leaderboard
+        loadLeaderboard();
         
         // Update start button visibility based on current player
         updateStartButtonVisibility();
