@@ -471,6 +471,50 @@ async function loadParticipants() {
     }
 }
 
+// Load current game state from database
+async function loadCurrentGameState() {
+    try {
+        const { data, error } = await supabase
+            .from('game_state')
+            .select('*')
+            .eq('id', 1)
+            .single();
+        
+        if (error && error.code !== 'PGRST116') {
+            console.error('Error loading game state:', error);
+            return;
+        }
+        
+        if (data) {
+            console.log('Loaded current game state:', data);
+            
+            // Update local game state
+            gameState.gameStatus = data.game_status;
+            gameState.currentRound = data.current_round;
+            gameState.timeRemaining = data.time_remaining;
+            
+            // Handle current game state
+            if (data.game_status === 'playing' && data.current_quote_id) {
+                // Game is currently in progress, join the round
+                await startRoundForAllPlayers(data.current_quote_id);
+            } else if (data.game_status === 'showing_results') {
+                // Game is showing results
+                showResultsForAllPlayers();
+            } else {
+                // Game is waiting
+                showWaitingState();
+            }
+        } else {
+            console.log('No game state found, starting fresh');
+            showWaitingState();
+        }
+        
+    } catch (error) {
+        console.error('Error loading game state:', error);
+        showWaitingState();
+    }
+}
+
 // Display participants in colorful bubbles
 function displayParticipants(participants) {
     participantsList.innerHTML = '';
@@ -584,6 +628,9 @@ async function handleGameStateChange(newGameState) {
     } else if (newGameState.game_status === 'showing_results') {
         // Show results for all players
         showResultsForAllPlayers();
+    } else if (newGameState.game_status === 'waiting') {
+        // Return to waiting state
+        showWaitingState();
     }
 }
 
@@ -696,6 +743,28 @@ function showResultsForAllPlayers() {
         nextRoundBtn.style.display = 'block';
     } else {
         nextRoundBtn.style.display = 'none';
+    }
+    
+    // Clear timer
+    if (gameTimer) {
+        clearInterval(gameTimer);
+        gameTimer = null;
+    }
+}
+
+// Show waiting state for all players
+function showWaitingState() {
+    console.log('Showing waiting state for all players');
+    
+    // Hide game question and results
+    gameQuestion.classList.add('hidden');
+    gameResult.classList.add('hidden');
+    
+    // Show start button only for authorized players
+    if (isAuthorizedPlayer(gameState.currentPlayer)) {
+        startGameBtn.style.display = 'block';
+    } else {
+        startGameBtn.style.display = 'none';
     }
     
     // Clear timer
@@ -1182,6 +1251,9 @@ function showSuccess() {
         
         // Set up realtime subscription for the game area
         setupRealtimeSubscription();
+        
+        // Load current game state
+        loadCurrentGameState();
         
         // Update start button visibility based on current player
         updateStartButtonVisibility();
