@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Who Said It? - Fun Game</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Comic+Neue:wght@300;400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="game-card">
+            <h1 class="main-title">WHO SAID IT?</h1>
+            <p class="subtitle">Share your wisdom and join the fun!</p>
+            
+            <form id="submissionForm" class="submission-form">
+                <div class="form-group">
+                    <label for="oneLiner">Enter your one-liner:</label>
+                    <textarea 
+                        id="oneLiner" 
+                        name="oneLiner" 
+                        placeholder="Share your funniest, wisest, or most memorable quote..."
+                        required
+                    ></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="userName">Your Name:</label>
+                    <input 
+                        type="text" 
+                        id="userName" 
+                        name="userName" 
+                        placeholder="What should we call you?"
+                        required
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="position">Your Position:</label>
+                    <input 
+                        type="text" 
+                        id="position" 
+                        name="position" 
+                        placeholder="CEO, Student, Parent, etc."
+                        required
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="brand">Your Brand:</label>
+                    <input 
+                        type="text" 
+                        id="brand" 
+                        name="brand" 
+                        placeholder="Company, School, or Personal Brand"
+                        required
+                    >
+                </div>
+                
+                <button type="submit" class="submit-btn">
+                    <span class="btn-text">Submit & Play!</span>
+                    <span class="btn-emoji">🎮</span>
+                </button>
+            </form>
+            
+            <div id="successMessage" class="success-message hidden">
+                <div class="success-content">
+                    <h2>🎉 Awesome!</h2>
+                    <p>Your quote has been saved successfully!</p>
+                    <p>Get ready to play...</p>
+                    <div class="loading-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Area -->
+    <div id="gameArea" class="game-area hidden">
+        <div class="game-container">
+            <div class="game-header">
+                <h1 class="game-title">🎮 WHO SAID IT? GAME</h1>
+                <div class="header-controls">
+                    <div id="currentPlayerInfo" class="current-player-info">
+                        <span class="player-label">Current Player:</span>
+                        <span id="currentPlayerName" class="player-name">-</span>
+                        <span id="gameControlStatus" class="control-status">🔒</span>
+                    </div>
+                    <button id="backToInput" class="back-btn">← Back to Submit</button>
+                </div>
+            </div>
+
+            <!-- Participants Panel -->
+            <div class="participants-panel">
+                <h2 class="panel-title">🌟 Our Amazing Participants</h2>
+                <div id="participantsList" class="participants-list">
+                    <!-- Participants will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Game Controls -->
+            <div class="game-controls">
+                <button id="startGame" class="start-game-btn">
+                    <span class="btn-text">🎯 Start New Round!</span>
+                    <span class="btn-emoji">🚀</span>
+                </button>
+                <div id="gameControlMessage" class="game-control-message hidden">
+                    <p>⏳ Waiting for other players...</p>
+                    <p>More participants are joining the game!</p>
+                    <div class="loading-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Game Question Area -->
+            <div id="gameQuestion" class="game-question hidden">
+                <div class="quote-container">
+                    <div class="quote-bubble">
+                        <p id="currentQuote" class="quote-text"></p>
+                        <div class="quote-decoration">💭</div>
+                    </div>
+                </div>
+
+                <div class="choices-container">
+                    <h3 class="choices-title">Who do you think said this?</h3>
+                    <div id="nameChoices" class="name-choices">
+                        <!-- Name choices will be loaded here -->
+                    </div>
+                </div>
+
+                <div id="gameResult" class="game-result hidden">
+                    <div class="result-content">
+                        <h3 id="resultTitle"></h3>
+                        <p id="resultMessage"></p>
+                        <button id="nextRound" class="next-round-btn">Next Round →</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Game Stats -->
+            <div class="game-stats">
+                <div class="stat-item">
+                    <span class="stat-label">Round:</span>
+                    <span id="currentRound" class="stat-value">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Correct:</span>
+                    <span id="correctAnswers" class="stat-value">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Total:</span>
+                    <span id="totalAnswers" class="stat-value">0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="script.js"></script>
+</body>
+</html>
