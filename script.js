@@ -702,6 +702,7 @@ function startGameTimer() {
         
         if (gameState.timeRemaining <= 0) {
             clearInterval(gameTimer);
+            revealAnswers();
             endRound();
         }
     }, 1000);
@@ -723,6 +724,51 @@ function updateTimerDisplay() {
             timerElement.style.color = '#4ecdc4';
             timerElement.style.animation = 'none';
         }
+    }
+}
+
+// Reveal answers when timer reaches 0
+function revealAnswers() {
+    console.log('Revealing answers...');
+    
+    const allChoices = document.querySelectorAll('.name-choice');
+    
+    // Mark the correct answer
+    allChoices.forEach(choice => {
+        const name = choice.dataset.name;
+        if (name === gameState.currentQuote.user_name) {
+            choice.classList.add('correct');
+        }
+    });
+    
+    // If player has answered, show their result
+    if (gameState.hasAnswered) {
+        const selectedChoice = document.querySelector('.name-choice.selected');
+        if (selectedChoice) {
+            const selectedName = selectedChoice.dataset.name;
+            const isCorrect = selectedName === gameState.currentQuote.user_name;
+            
+            if (!isCorrect) {
+                selectedChoice.classList.add('incorrect');
+            }
+            
+            // Update the result message
+            if (isCorrect) {
+                resultTitle.textContent = '🎉 Correct!';
+                resultTitle.style.color = '#4ecdc4';
+                resultMessage.textContent = `Great job! You got it right!`;
+                createConfetti();
+            } else {
+                resultTitle.textContent = '😅 Not quite!';
+                resultTitle.style.color = '#ff6b6b';
+                resultMessage.textContent = `The correct answer was ${gameState.currentQuote.user_name} (${gameState.currentQuote.position} at ${gameState.currentQuote.brand}).`;
+            }
+        }
+    } else {
+        // Player didn't answer in time
+        resultTitle.textContent = '⏰ Time\'s Up!';
+        resultTitle.style.color = '#ff6b6b';
+        resultMessage.textContent = `The correct answer was ${gameState.currentQuote.user_name} (${gameState.currentQuote.position} at ${gameState.currentQuote.brand}).`;
     }
 }
 
@@ -874,11 +920,25 @@ async function selectChoice(choiceElement, selectedName) {
         gameState.correctAnswers++;
     }
     
-    // Show immediate feedback
-    showImmediateFeedback(isCorrect, selectedName);
+    // Show that the player has answered, but don't reveal the answer yet
+    showAnswerSubmitted(selectedName);
 }
 
-// Show immediate feedback when player answers
+// Show that player has submitted their answer (but don't reveal the correct answer yet)
+function showAnswerSubmitted(selectedName) {
+    // Show a message that the player has answered
+    resultTitle.textContent = '✅ Answer Submitted!';
+    resultTitle.style.color = '#4ecdc4';
+    resultMessage.textContent = `You selected "${selectedName}". Waiting for other players...`;
+    
+    // Show result panel
+    gameResult.classList.remove('hidden');
+    
+    // Update stats
+    updateStats();
+}
+
+// Show immediate feedback when player answers (called when timer expires)
 function showImmediateFeedback(isCorrect, selectedName) {
     const allChoices = document.querySelectorAll('.name-choice');
     
@@ -929,11 +989,11 @@ function showGameResult(isCorrect, selectedName) {
     if (isCorrect) {
         resultTitle.textContent = '🎉 Correct!';
         resultTitle.style.color = '#4ecdc4';
-        resultMessage.textContent = `Great job! ${gameState.currentQuote.user_name} said that quote.`;
+        resultMessage.textContent = `Great job! ${gameState.currentQuote.user_name} (${gameState.currentQuote.position} at ${gameState.currentQuote.brand}) said that quote.`;
     } else {
         resultTitle.textContent = '😅 Not quite!';
         resultTitle.style.color = '#ff6b6b';
-        resultMessage.textContent = `Actually, ${gameState.currentQuote.user_name} said that quote.`;
+        resultMessage.textContent = `Actually, ${gameState.currentQuote.user_name} (${gameState.currentQuote.position} at ${gameState.currentQuote.brand}) said that quote.`;
     }
     
     // Show result panel
