@@ -568,6 +568,9 @@ body::after {
 .game-controls {
     text-align: center;
     margin-bottom: 30px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .start-game-btn {
@@ -775,9 +778,10 @@ body::after {
 
 .name-choices {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
     gap: 20px;
-    max-width: 800px;
+    max-width: 600px;
     margin: 0 auto;
 }
 
@@ -785,7 +789,7 @@ body::after {
     background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57);
     background-size: 200% 200%;
     animation: gradientShift 3s ease infinite;
-    color: white;
+    color: #2c3e50;
     padding: 20px;
     border-radius: 20px;
     font-weight: 700;
@@ -1046,7 +1050,8 @@ body::after {
     }
     
     .name-choices {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr 1fr;
+        max-width: 400px;
     }
     
     .timer-container {
@@ -1079,6 +1084,11 @@ body::after {
     .name-choice {
         padding: 15px;
         font-size: 1rem;
+    }
+    
+    .name-choices {
+        grid-template-columns: 1fr;
+        max-width: 300px;
     }
     
     .game-stats {
