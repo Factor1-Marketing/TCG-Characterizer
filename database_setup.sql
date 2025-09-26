@@ -46,3 +46,6 @@ CREATE POLICY "Allow public read on user_submissions" ON user_submissions
 -- (You might want to add a user_id field later for this to work properly)
 -- CREATE POLICY "Allow users to update own submissions" ON user_submissions
 --     FOR UPDATE USING (auth.uid() = user_id);
+
+-- Enable realtime for the user_submissions table
+ALTER PUBLICATION supabase_realtime ADD TABLE user_submissions;

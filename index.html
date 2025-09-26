@@ -160,6 +160,25 @@
             </div>
         </div>
     </div>
+
+    <!-- Debug Screen -->
+    <div id="debugScreen" class="debug-screen hidden">
+        <div class="debug-container">
+            <div class="debug-header">
+                <h2>🐛 Debug Console</h2>
+                <div class="debug-controls">
+                    <button id="clearDebug" class="debug-btn">Clear</button>
+                    <button id="toggleDebug" class="debug-btn">Hide Debug</button>
+                </div>
+            </div>
+            <div id="debugMessages" class="debug-messages">
+                <!-- Debug messages will appear here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Debug Toggle Button -->
+    <button id="debugToggle" class="debug-toggle">🐛</button>
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="script.js"></script>

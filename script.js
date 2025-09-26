@@ -206,6 +206,13 @@ let gameState = {
     currentPlayer: null
 };
 
+// Realtime subscription
+let participantsSubscription = null;
+
+// Debug system
+const debugMessages = [];
+const maxDebugMessages = 100;
+
 // Authorized game controllers
 const authorizedControllers = ['Jose', 'Joe', 'Jose Tabbada'];
 
@@ -271,7 +278,136 @@ document.addEventListener('DOMContentLoaded', () => {
     startGameBtn.addEventListener('click', startNewRound);
     nextRoundBtn.addEventListener('click', startNewRound);
     backToInputBtn.addEventListener('click', goBackToInput);
+    
+    // Debug system setup
+    setupDebugSystem();
 });
+
+// Set up realtime subscription for new participants
+function setupRealtimeSubscription() {
+    // Clean up existing subscription if any
+    if (participantsSubscription) {
+        supabase.removeChannel(participantsSubscription);
+    }
+    
+    console.log('Setting up realtime subscription...');
+    
+    // Subscribe to changes in user_submissions table
+    participantsSubscription = supabase
+        .channel('participants_changes')
+        .on('postgres_changes', 
+            { 
+                event: 'INSERT', 
+                schema: 'public', 
+                table: 'user_submissions' 
+            }, 
+            (payload) => {
+                console.log('Realtime event received:', payload);
+                handleNewParticipant(payload.new);
+            }
+        )
+        .subscribe((status) => {
+            console.log('Realtime subscription status:', status);
+            if (status === 'SUBSCRIBED') {
+                console.log('✅ Successfully subscribed to realtime updates');
+            } else if (status === 'CHANNEL_ERROR') {
+                console.log('❌ Realtime subscription failed - realtime might not be enabled');
+                // Fallback to polling if realtime fails
+                setupPollingFallback();
+            }
+        });
+}
+
+// Fallback polling method if realtime doesn't work
+function setupPollingFallback() {
+    console.log('Setting up polling fallback...');
+    
+    // Poll every 3 seconds for new participants
+    const pollInterval = setInterval(async () => {
+        try {
+            const { data, error } = await supabase
+                .from('user_submissions')
+                .select('user_name')
+                .order('created_at', { ascending: false })
+                .limit(1);
+            
+            if (error) {
+                console.error('Polling error:', error);
+                return;
+            }
+            
+            if (data && data.length > 0) {
+                const latestParticipant = data[0].user_name;
+                if (!gameState.participants.includes(latestParticipant)) {
+                    console.log('New participant found via polling:', latestParticipant);
+                    handleNewParticipant({ user_name: latestParticipant });
+                }
+            }
+        } catch (error) {
+            console.error('Polling error:', error);
+        }
+    }, 3000);
+    
+    // Store interval ID for cleanup
+    gameState.pollingInterval = pollInterval;
+}
+
+// Handle new participant being added
+function handleNewParticipant(newSubmission) {
+    console.log('Handling new participant:', newSubmission);
+    const newParticipantName = newSubmission.user_name;
+    
+    // Check if this is a new participant (not already in our list)
+    if (!gameState.participants.includes(newParticipantName)) {
+        console.log('Adding new participant:', newParticipantName);
+        
+        // Add to our participants list
+        gameState.participants.push(newParticipantName);
+        
+        // Add the new participant bubble with animation
+        addNewParticipantBubble(newParticipantName);
+        
+        // Show notification
+        showNewParticipantNotification(newParticipantName);
+    } else {
+        console.log('Participant already exists:', newParticipantName);
+    }
+}
+
+// Add new participant bubble with animation
+function addNewParticipantBubble(participantName) {
+    const bubble = document.createElement('div');
+    bubble.className = 'participant-bubble new-participant';
+    bubble.textContent = participantName;
+    
+    // Add to the list
+    participantsList.appendChild(bubble);
+    
+    // Trigger animation
+    setTimeout(() => {
+        bubble.classList.remove('new-participant');
+    }, 100);
+}
+
+// Show notification for new participant
+function showNewParticipantNotification(participantName) {
+    const notification = document.createElement('div');
+    notification.className = 'new-participant-notification';
+    notification.innerHTML = `
+        <div class="notification-content">
+            <span class="notification-emoji">🎉</span>
+            <span class="notification-text">${participantName} joined the game!</span>
+        </div>
+    `;
+    
+    // Add to game area
+    gameArea.appendChild(notification);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        notification.remove();
+    }, 3000);
+}
 
 // Load participants from database
 async function loadParticipants() {
@@ -474,6 +610,18 @@ function goBackToInput() {
     gameState.gameStarted = false;
     gameState.currentPlayer = null;
     
+    // Clean up realtime subscription
+    if (participantsSubscription) {
+        supabase.removeChannel(participantsSubscription);
+        participantsSubscription = null;
+    }
+    
+    // Clean up polling interval if it exists
+    if (gameState.pollingInterval) {
+        clearInterval(gameState.pollingInterval);
+        gameState.pollingInterval = null;
+    }
+    
     // Reset UI
     startGameBtn.style.display = 'block';
     gameQuestion.classList.add('hidden');
@@ -553,6 +701,91 @@ function clearNameValidation(input) {
     input.classList.remove('name-valid', 'name-invalid');
 }
 
+// Debug system functions
+function setupDebugSystem() {
+    const debugScreen = document.getElementById('debugScreen');
+    const debugToggle = document.getElementById('debugToggle');
+    const clearDebug = document.getElementById('clearDebug');
+    const toggleDebug = document.getElementById('toggleDebug');
+    
+    // Toggle debug screen
+    debugToggle.addEventListener('click', () => {
+        debugScreen.classList.toggle('hidden');
+    });
+    
+    // Clear debug messages
+    clearDebug.addEventListener('click', () => {
+        debugMessages.length = 0;
+        updateDebugDisplay();
+    });
+    
+    // Hide debug screen
+    toggleDebug.addEventListener('click', () => {
+        debugScreen.classList.add('hidden');
+    });
+    
+    // Override console.log to capture messages
+    const originalLog = console.log;
+    const originalError = console.error;
+    const originalWarn = console.warn;
+    
+    console.log = function(...args) {
+        originalLog.apply(console, args);
+        addDebugMessage('info', args.join(' '));
+    };
+    
+    console.error = function(...args) {
+        originalError.apply(console, args);
+        addDebugMessage('error', args.join(' '));
+    };
+    
+    console.warn = function(...args) {
+        originalWarn.apply(console, args);
+        addDebugMessage('warning', args.join(' '));
+    };
+    
+    // Add initial debug message
+    addDebugMessage('success', 'Debug system initialized!');
+}
+
+function addDebugMessage(type, message) {
+    const timestamp = new Date().toLocaleTimeString();
+    const debugMessage = {
+        type,
+        message,
+        timestamp
+    };
+    
+    debugMessages.push(debugMessage);
+    
+    // Keep only the last maxDebugMessages
+    if (debugMessages.length > maxDebugMessages) {
+        debugMessages.shift();
+    }
+    
+    updateDebugDisplay();
+}
+
+function updateDebugDisplay() {
+    const debugMessagesEl = document.getElementById('debugMessages');
+    if (!debugMessagesEl) return;
+    
+    debugMessagesEl.innerHTML = '';
+    
+    debugMessages.forEach(msg => {
+        const messageEl = document.createElement('div');
+        messageEl.className = `debug-message ${msg.type}`;
+        messageEl.innerHTML = `
+            <span class="debug-timestamp">[${msg.timestamp}]</span>
+            ${msg.message}
+        `;
+        debugMessagesEl.appendChild(messageEl);
+    });
+    
+    // Auto-scroll to bottom
+    debugMessagesEl.scrollTop = debugMessagesEl.scrollHeight;
+}
+
 // Update start button visibility based on current player
 function updateStartButtonVisibility() {
     if (gameState.currentPlayer && isAuthorizedPlayer(gameState.currentPlayer)) {
@@ -604,6 +837,9 @@ function showSuccess() {
         
         // Load fresh participants
         loadParticipants();
+        
+        // Set up realtime subscription for the game area
+        setupRealtimeSubscription();
         
         // Update start button visibility based on current player
         updateStartButtonVisibility();
